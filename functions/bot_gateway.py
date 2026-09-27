@@ -1,30 +1,12 @@
-"""Authenticated CRUD gateway for Gearshift axis bots.
+"""Authenticated gateway for Gearshift finance writes and CoS reads.
 
-Bots call the HTTP function ``bot_gateway`` with a bearer API key. Reads of
-allowlisted Firestore collections run immediately. Creates, updates, and
-deletes are stored as pending confirmations and do not touch the target
-document until Abi confirms with that token, the proposal's ``payloadHash``,
-and ``ABI_APPROVAL_SECRET``.
+Callers authenticate with a Firebase ID token or a bot service secret, both
+in ``Authorization: Bearer``. Finance creates, updates, and deletes are
+drafts until a separate confirm call. A bot secret cannot confirm. Confirm
+requires the Firebase user token or ``ABI_APPROVAL_SECRET``.
 
-This module does not move money, place trades, or call any client API. It
-writes the JSON object Abi approved, and nothing else.
-
-Secrets (Firebase Secret Manager, never committed):
-
-    firebase functions:secrets:set BOT_API_KEYS --project dashboard-bb237
-    # {"finance":"<random>","ops":"<random>"}
-    # bot ids: lowercase letter, then lowercase letters, digits, "_" or "-"
-    # each key: at least 20 characters; surrounding whitespace is ignored
-
-    firebase functions:secrets:set ABI_APPROVAL_SECRET --project dashboard-bb237
-    # one random string, at least 20 characters, different from every bot key
-
-Give bot keys to axis bots. Keep the approval secret off the bots; Abi sends
-it only on ``action=confirm`` in the ``X-Abi-Approval`` header.
-
-Local unit tests can pass the same values as plain strings. In Cloud
-Functions they are bound with ``SecretParam`` and show up as environment
-variables.
+CoS collections are read-only. This module does not move money, place trades,
+or talk to Plaid. Operator steps live in ``docs/bot-gateway.md``.
 """
 
 from __future__ import annotations
@@ -61,22 +43,92 @@ FINANCE_COLLECTIONS = frozenset(
         "budgetLogs",
     }
 )
-# Ops: axes/goals/tasks, daily habit metrics, axis check-ins, kanban.
-OPS_COLLECTIONS = frozenset(
+# Chief-of-staff reads. Writes to these collections are refused.
+# new_weeklyPlans is the weekly plan doc the Weekly view actually uses.
+COS_COLLECTIONS = frozenset(
     {
-        "new_axes",
-        "new_goals",
-        "new_milestones",
-        "new_tasks",
+        "new_weeklyPlans",
         "dailyMetrics",
-        "goalCheckins",
         "projects",
         "kanbanCards",
         "amRoutineLogs",
         "pmRoutineLogs",
+        "new_axes",
+        "new_goals",
+        "new_milestones",
     }
 )
-ALLOWED_COLLECTIONS = FINANCE_COLLECTIONS | OPS_COLLECTIONS
+ALLOWED_COLLECTIONS = FINANCE_COLLECTIONS | COS_COLLECTIONS
+
+# Field shapes copied from FinancialPlanner managers and BudgetForm.
+# Timestamp fields are omitted; the app writes those with serverTimestamp.
+_DEBT_TYPES = ("credit_card", "loan", "mortgage", "other")
+_BILL_CATEGORIES = ("housing", "debt_payment", "subscription", "insurance", "utilities", "other")
+_FREQUENCIES = ("monthly", "annual", "weekly")
+_INVESTMENT_TYPES = ("savings", "brokerage", "retirement", "ira", "other")
+_OWNERS = ("Abi", "Tiffany", "Joint")
+_TIMESTAMP_FIELDS = frozenset({"createdAt", "updatedAt", "completedAt", "lastUpdated"})
+
+FINANCE_SCHEMAS: dict[str, dict] = {
+    "userDebts": {
+        "required": ("name", "type", "balance", "interestRate", "minimumPayment"),
+        "fields": {
+            "name": "nonempty_string",
+            "type": ("enum", _DEBT_TYPES),
+            "balance": "number",
+            "interestRate": "number",
+            "minimumPayment": "number",
+            "loginUrl": "string",
+            "notes": "string",
+        },
+    },
+    "userBills": {
+        "required": ("name", "category", "budgeted", "frequency"),
+        "fields": {
+            "name": "nonempty_string",
+            "category": ("enum", _BILL_CATEGORIES),
+            "budgeted": "number",
+            "amount": "number",
+            "actual": "nullable_number",
+            "frequency": ("enum", _FREQUENCIES),
+            "autopay": "bool",
+            "dueDay": "nullable_day",
+            "loginUrl": "string",
+        },
+    },
+    "userInvestments": {
+        "required": ("name", "type", "balance", "monthlyContribution", "expectedReturn", "owner"),
+        "fields": {
+            "name": "nonempty_string",
+            "type": ("enum", _INVESTMENT_TYPES),
+            "accountSuffix": "string",
+            "balance": "number",
+            "monthlyContribution": "number",
+            "expectedReturn": "number",
+            "owner": ("enum", _OWNERS),
+            "loginUrl": "string",
+        },
+    },
+    "userIncome": {
+        "required": ("name", "frequency", "amount"),
+        "fields": {
+            "name": "nonempty_string",
+            "frequency": ("enum", _FREQUENCIES),
+            "amount": "number",
+        },
+    },
+    "budgetLogs": {
+        "required": ("type", "checklistCompleted", "durationMinutes"),
+        "fields": {
+            "type": ("enum", ("budgetRoutine",)),
+            "checklistCompleted": "string_list",
+            "netWorth": "nullable_number",
+            "bettermentBalance": "nullable_number",
+            "totalDebt": "nullable_number",
+            "durationMinutes": "number",
+        },
+    },
+}
 
 READ_ACTIONS = frozenset({"capabilities", "get", "list"})
 MUTATING_ACTIONS = frozenset({"create", "update", "delete"})
@@ -99,10 +151,25 @@ _TOKEN_RE = re.compile(r"^[A-Za-z0-9_-]{20,200}$")
 
 
 class GatewayError(Exception):
-    def __init__(self, status: int, code: str):
+    def __init__(self, status: int, code: str, detail: str | None = None):
         super().__init__(code)
         self.status = status
         self.code = code
+        self.detail = detail
+
+
+class Principal:
+    """A verified caller. ``kind`` is ``user`` (Firebase ID token) or ``bot``."""
+
+    def __init__(self, kind: str, subject: str):
+        self.kind = kind
+        self.subject = subject
+
+    @property
+    def requested_by(self) -> str:
+        if self.kind == "user":
+            return f"user:{self.subject}"
+        return self.subject
 
 
 class DocumentMissing(Exception):
@@ -132,6 +199,7 @@ def handle_gateway(
     bot_keys_raw: str | None,
     approval_secret: str | None,
     now: int,
+    verify_id_token=None,
 ) -> tuple[int, dict]:
     try:
         return _handle(
@@ -142,9 +210,13 @@ def handle_gateway(
             bot_keys_raw=bot_keys_raw,
             approval_secret=approval_secret,
             now=now,
+            verify_id_token=verify_id_token,
         )
     except GatewayError as err:
-        return err.status, {"ok": False, "error": err.code}
+        payload = {"ok": False, "error": err.code}
+        if err.detail:
+            payload["detail"] = err.detail
+        return err.status, payload
 
 
 def _handle(
@@ -156,6 +228,7 @@ def _handle(
     bot_keys_raw: str | None,
     approval_secret: str | None,
     now: int,
+    verify_id_token=None,
 ) -> tuple[int, dict]:
     if (method or "").upper() != "POST":
         raise GatewayError(405, "method_not_allowed")
@@ -173,14 +246,21 @@ def _handle(
 
     keys = load_bot_keys(bot_keys_raw)
     approval = load_approval_secret(approval_secret, keys)
-    bot_id = _authenticated_bot(headers, keys)
+    principal = _authenticate(headers, keys, verify_id_token)
 
     if action == "confirm":
-        return _confirm(body, headers, store=store, approval=approval, now=now)
+        return _confirm(
+            body,
+            headers,
+            store=store,
+            approval=approval,
+            now=now,
+            principal=principal,
+        )
 
-    if keys is None:
-        raise GatewayError(503, "gateway_not_configured")
-    if bot_id is None:
+    if principal is None:
+        if keys is None:
+            raise GatewayError(503, "gateway_not_configured")
         raise GatewayError(401, "unauthorized")
 
     if action == "capabilities":
@@ -190,7 +270,7 @@ def _handle(
     if action == "get":
         return _get(body, store)
     if action in MUTATING_ACTIONS:
-        return _propose(action, body, store=store, bot_id=bot_id, now=now)
+        return _propose(action, body, store=store, principal=principal, now=now)
 
     raise GatewayError(400, "invalid_action")
 
@@ -200,12 +280,13 @@ def capabilities_payload() -> dict:
         "ok": True,
         "action": "capabilities",
         "confirmTtlSeconds": CONFIRM_TTL_SECONDS,
+        "auth": ["firebase_id_token", "bot_service_secret"],
         "reads": sorted(READ_ACTIONS),
-        "mutations": sorted(MUTATING_ACTIONS),
-        "mutationsRequire": "confirm token plus X-Abi-Approval",
+        "financeMutations": sorted(MUTATING_ACTIONS),
+        "financeMutationsRequire": "propose, then confirm with a Firebase ID token or X-Abi-Approval",
         "collections": {
-            "finance": sorted(FINANCE_COLLECTIONS),
-            "ops": sorted(OPS_COLLECTIONS),
+            "finance": {"access": "read_write", "names": sorted(FINANCE_COLLECTIONS)},
+            "cos": {"access": "read", "names": sorted(COS_COLLECTIONS)},
         },
     }
 
@@ -227,7 +308,7 @@ def load_bot_keys(raw: str | None) -> dict[str, str] | None:
         if not isinstance(key, str):
             return None
         key = key.strip()
-        if len(key) < MIN_SECRET_LENGTH:
+        if len(key) < MIN_SECRET_LENGTH or "." in key:
             return None
         keys[bot_id] = key
     if len(set(keys.values())) != len(keys):
@@ -453,14 +534,27 @@ class MemoryStore:
         }
 
 
-def _confirm(body: dict, headers, *, store: GatewayStore, approval: str | None, now: int) -> tuple[int, dict]:
-    if approval is None:
-        raise GatewayError(503, "gateway_not_configured")
-    presented = header_value(headers, "X-Abi-Approval")
-    if not presented:
-        raise GatewayError(401, "approval_required")
-    if not sealed_equal(presented, approval):
-        raise GatewayError(401, "unauthorized")
+def _confirm(
+    body: dict,
+    headers,
+    *,
+    store: GatewayStore,
+    approval: str | None,
+    now: int,
+    principal: Principal | None,
+) -> tuple[int, dict]:
+    # A Firebase user may commit. A bot secret may not. Curl can commit with
+    # the approval secret instead of an ID token. Either way this is a second
+    # request: propose never writes the target.
+    user_commit = principal is not None and principal.kind == "user"
+    if not user_commit:
+        if approval is None:
+            raise GatewayError(503, "gateway_not_configured")
+        presented = header_value(headers, "X-Abi-Approval")
+        if not presented:
+            raise GatewayError(401, "approval_required")
+        if not sealed_equal(presented, approval):
+            raise GatewayError(401, "unauthorized")
 
     token = body.get("confirmToken")
     if not isinstance(token, str) or _TOKEN_RE.fullmatch(token) is None:
@@ -500,8 +594,8 @@ def _confirm(body: dict, headers, *, store: GatewayStore, approval: str | None, 
     raise GatewayError(status, code)
 
 
-def _propose(action: str, body: dict, *, store: GatewayStore, bot_id: str, now: int) -> tuple[int, dict]:
-    collection = _parse_collection(body)
+def _propose(action: str, body: dict, *, store: GatewayStore, principal: Principal, now: int) -> tuple[int, dict]:
+    collection = _parse_collection(body, write=True)
     doc_id = _parse_doc_id(body, required=action != "create")
     if action == "delete":
         if "data" in body and body["data"] is not None:
@@ -509,6 +603,8 @@ def _propose(action: str, body: dict, *, store: GatewayStore, bot_id: str, now: 
         data = None
     else:
         data = _parse_data(body)
+        if collection in FINANCE_COLLECTIONS:
+            data = normalize_finance_data(collection, action, data)
 
     if action in {"update", "delete"}:
         if store.get_doc(collection, doc_id) is None:
@@ -525,7 +621,7 @@ def _propose(action: str, body: dict, *, store: GatewayStore, bot_id: str, now: 
         "docId": doc_id,
         "data": data,
         "payloadHash": payload_hash,
-        "requestedBy": bot_id,
+        "requestedBy": principal.requested_by,
         "createdAt": now,
         "expiresAt": now + CONFIRM_TTL_SECONDS,
     }
@@ -535,7 +631,7 @@ def _propose(action: str, body: dict, *, store: GatewayStore, bot_id: str, now: 
         "status": "pending_approval",
         "confirmToken": token,
         "expiresAt": _iso(record["expiresAt"]),
-        "requestedBy": bot_id,
+        "requestedBy": principal.requested_by,
         "preview": {
             "action": action,
             "collection": collection,
@@ -574,16 +670,36 @@ def _parse_body(raw_body: str) -> dict:
     return body
 
 
-def _authenticated_bot(headers, keys: dict[str, str] | None) -> str | None:
+def _authenticate(headers, keys: dict[str, str] | None, verify_id_token) -> Principal | None:
     presented = parse_bearer(header_value(headers, "Authorization"))
     if presented is None:
         return None
+    if _looks_like_jwt(presented):
+        if verify_id_token is None:
+            raise GatewayError(401, "unauthorized")
+        try:
+            decoded = verify_id_token(presented)
+        except GatewayError:
+            raise
+        except Exception:
+            raise GatewayError(401, "unauthorized") from None
+        if not isinstance(decoded, dict):
+            raise GatewayError(401, "unauthorized")
+        uid = decoded.get("uid") or decoded.get("sub")
+        if not isinstance(uid, str) or not uid.strip():
+            raise GatewayError(401, "unauthorized")
+        return Principal("user", uid.strip())
     if keys is None:
         raise GatewayError(503, "gateway_not_configured")
     bot_id = identify_bot(presented, keys)
     if bot_id is None:
         raise GatewayError(401, "unauthorized")
-    return bot_id
+    return Principal("bot", bot_id)
+
+
+def _looks_like_jwt(token: str) -> bool:
+    parts = token.split(".")
+    return len(parts) == 3 and all(parts)
 
 
 def identify_bot(presented: str, keys: dict[str, str]) -> str | None:
@@ -618,11 +734,89 @@ def header_value(headers, name: str) -> str | None:
     return None
 
 
-def _parse_collection(body: dict) -> str:
+def _parse_collection(body: dict, *, write: bool = False) -> str:
     collection = body.get("collection")
     if not isinstance(collection, str) or collection not in ALLOWED_COLLECTIONS:
         raise GatewayError(403, "collection_not_allowed")
+    if write and collection in COS_COLLECTIONS:
+        raise GatewayError(403, "collection_read_only")
     return collection
+
+
+def normalize_finance_data(collection: str, action: str, data: dict) -> dict:
+    """Check a finance payload against the FinancialPlanner field shape.
+
+    Returns the object that will be stored. Bills copy ``budgeted`` into
+    ``amount`` when amount is omitted, matching BillsManager.
+    """
+    schema = FINANCE_SCHEMAS[collection]
+    cleaned: dict = {}
+    for key, value in data.items():
+        if key in _TIMESTAMP_FIELDS:
+            raise GatewayError(
+                400,
+                "invalid_field",
+                "omit server timestamp fields; the app writes those",
+            )
+        spec = schema["fields"].get(key)
+        if spec is None:
+            raise GatewayError(400, "invalid_field", f"unknown field {key}")
+        cleaned[key] = _coerce_finance_value(key, spec, value)
+    if action == "create":
+        missing = [name for name in schema["required"] if name not in cleaned]
+        if missing:
+            raise GatewayError(400, "invalid_shape", f"missing {missing[0]}")
+    if collection == "userBills" and "budgeted" in cleaned and "amount" not in cleaned:
+        cleaned["amount"] = cleaned["budgeted"]
+    return cleaned
+
+
+def _coerce_finance_value(key: str, spec, value):
+    kind = spec[0] if isinstance(spec, tuple) else spec
+    if kind == "nonempty_string":
+        if not isinstance(value, str) or not value.strip():
+            raise GatewayError(400, "invalid_shape", f"{key} must be a non-empty string")
+        return value.strip()
+    if kind == "string":
+        if not isinstance(value, str):
+            raise GatewayError(400, "invalid_shape", f"{key} must be a string")
+        return value.strip()
+    if kind == "enum":
+        allowed = spec[1]
+        if not isinstance(value, str) or value not in allowed:
+            raise GatewayError(400, "invalid_shape", f"{key} must be one of {', '.join(allowed)}")
+        return value
+    if kind == "number":
+        return _require_number(key, value)
+    if kind == "nullable_number":
+        if value is None:
+            return None
+        return _require_number(key, value)
+    if kind == "bool":
+        if not isinstance(value, bool):
+            raise GatewayError(400, "invalid_shape", f"{key} must be a boolean")
+        return value
+    if kind == "nullable_day":
+        if value is None:
+            return None
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 31:
+            raise GatewayError(400, "invalid_shape", f"{key} must be an integer from 1 to 31 or null")
+        return value
+    if kind == "string_list":
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            raise GatewayError(400, "invalid_shape", f"{key} must be a list of strings")
+        return [item.strip() for item in value]
+    raise GatewayError(400, "invalid_shape", key)
+
+
+def _require_number(key: str, value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise GatewayError(400, "invalid_shape", f"{key} must be a number")
+    if isinstance(value, float) and (value != value or value in {float("inf"), float("-inf")}):
+        raise GatewayError(400, "number_not_finite")
+    if isinstance(value, int) and abs(value) > MAX_SAFE_INTEGER:
+        raise GatewayError(400, "number_out_of_range")
+    return value
 
 
 def _require_allowed(collection: str) -> None:

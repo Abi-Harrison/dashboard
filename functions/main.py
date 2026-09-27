@@ -4,7 +4,7 @@ import json
 import os.path
 import time
 
-from firebase_admin import firestore, initialize_app, storage
+from firebase_admin import auth, firestore, initialize_app, storage
 from firebase_functions import https_fn, storage_fn
 from firebase_functions.params import SecretParam
 
@@ -21,8 +21,17 @@ BOT_API_KEYS = SecretParam(
 )
 ABI_APPROVAL_SECRET = SecretParam(
     "ABI_APPROVAL_SECRET",
-    description="Secret only Abi holds. Required to confirm mutating bot-gateway writes.",
+    description="Secret only Abi holds. Alternative to a Firebase ID token for confirming finance writes.",
 )
+
+
+def _verify_firebase_id_token(token: str) -> dict:
+    """Verify a Firebase Auth ID token. Raises if the token is not valid."""
+    decoded = auth.verify_id_token(token)
+    uid = decoded.get("uid") or decoded.get("sub")
+    if not isinstance(uid, str) or not uid:
+        raise ValueError("id token missing uid")
+    return {"uid": uid}
 
 # We will look for this marker in the filename to identify resized images.
 RESIZED_IMAGE_MARKER = "_800x800"
@@ -97,11 +106,7 @@ def on_image_upload(event: storage_fn.CloudEvent[storage_fn.StorageObjectData]):
     timeout_sec=30,
 )
 def bot_gateway(req: https_fn.Request) -> https_fn.Response:
-    """CRUD for allowlisted finance and ops collections.
-
-    Cloud IAM is public so bots can call the URL. The bearer key and Abi's
-    approval secret are the real gates; see bot_gateway.py.
-    """
+    """Finance drafts and CoS reads. See docs/bot-gateway.md."""
     raw_body = ""
     try:
         raw_body = req.get_data(cache=False, as_text=True) or ""
@@ -113,6 +118,7 @@ def bot_gateway(req: https_fn.Request) -> https_fn.Response:
             bot_keys_raw=BOT_API_KEYS.value,
             approval_secret=ABI_APPROVAL_SECRET.value,
             now=int(time.time()),
+            verify_id_token=_verify_firebase_id_token,
         )
     except Exception as exc:
         print(f"bot_gateway error: {type(exc).__name__}")
