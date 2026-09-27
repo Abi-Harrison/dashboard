@@ -3,10 +3,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // All reads and writes require a signed-in Firebase user.
-    // Since this is a single-user personal app, this is the right gate.
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    // Pending bot-gateway mutations. The Admin SDK writes these.
+    // Client SDKs must not read or edit them: editing a pending record
+    // would change the write Abi confirms.
+    match /botGatewayConfirmations/{docId} {
+      allow read, write: if false;
+    }
+
+    // Every other document still requires a signed-in Firebase user.
+    // This is a single-user personal app.
+    match /{collection}/{document=**} {
+      allow read, write: if request.auth != null
+        && collection != 'botGatewayConfirmations';
     }
   }
 }
