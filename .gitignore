@@ -13,6 +13,8 @@ dist/
 dist-ssr/ # If you use Server-Side Rendering
 
 # Logs
+firebase-debug.log
+firestore-debug.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

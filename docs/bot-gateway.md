@@ -21,7 +21,7 @@ Two credentials are accepted:
 | Firebase ID token | Signed-in dashboard user (`currentUser.getIdToken()`) | yes | yes | yes |
 | Bot service secret | Axis bot, from `BOT_API_KEYS` | yes | yes | no |
 
-A Firebase ID token is a JWT (three dot-separated segments). The function verifies it with the Admin SDK (`auth.verify_id_token`). That is the same signed-in user `firestore.rules` already requires (`request.auth != null`). Any valid user in this Firebase project is accepted. This app is single-user.
+A Firebase ID token is a JWT (three dot-separated segments). The function verifies it with the Admin SDK (`auth.verify_id_token`). Gateway auth is unchanged: any valid user in this Firebase project is accepted. Client Firestore rules are tighter and allow only uid `1SORgD4xeFYG5hMRAmPjw6iUyJk2`. Keep Email/Password open signup off so no other account exists to mint a token.
 
 A bot secret is an opaque string with no `.` in it. `BOT_API_KEYS` is a JSON map of bot id to secret, for example `{"finance":"...","ops":"..."}`. Bot ids match `^[a-z][a-z0-9_-]{0,40}$`. Each secret is at least 20 characters.
 
@@ -276,9 +276,17 @@ Give the bot keys to axis bots. Keep the approval secret for Abi's confirm calls
 firebase deploy --only functions:bot_gateway,firestore:rules --project dashboard-bb237
 ```
 
-That publishes this function and the rule that blocks client access to `botGatewayConfirmations`. Hosting is not republished. `on_image_upload` stays as already deployed. A full `firebase deploy --only functions --project dashboard-bb237` still includes it, because `functions/main.py` still defines it.
+That publishes this function and `firestore.rules`. Hosting is not republished. `on_image_upload` stays as already deployed. A full `firebase deploy --only functions --project dashboard-bb237` still includes it, because `functions/main.py` still defines it.
 
-`firestore.rules` still require a signed-in user for every other document. The confirmation collection is denied to clients so a signed-in session cannot edit a pending draft. The Admin SDK bypasses those rules.
+Rules alone, after this function is already deployed:
+
+```bash
+firebase deploy --only firestore:rules --project dashboard-bb237
+```
+
+Client read and write are allowed only when `request.auth != null && request.auth.uid == '1SORgD4xeFYG5hMRAmPjw6iUyJk2'`. `botGatewayConfirmations` stays deny-all for every client, including that uid, so a signed-in session cannot edit a pending draft. Axis bots stay on this function. The Admin SDK bypasses these rules; do not move bots onto the client SDK.
+
+This repo cannot change Authentication settings. In Firebase Console → Authentication → Settings, confirm Email/Password accounts cannot be created by open signup. Gateway ID-token commit still accepts any verified user in the project.
 
 If Google returns 403 before any JSON body, public invoker was blocked. The function sets invoker to `public`. Fallback, using the service name from the deploy output if it differs:
 

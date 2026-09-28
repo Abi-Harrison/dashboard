@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:rules": "npx --yes firebase-tools@15.31.0 emulators:exec --only firestore --project demo-dashboard-bb237 \"node --test test/firestore.rules.test.mjs\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
@@ -34,6 +35,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@firebase/rules-unit-testing": "^4.0.1",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
