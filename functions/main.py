@@ -1,11 +1,37 @@
 # functions/main.py
 
+import json
 import os.path
-from firebase_functions import storage_fn
-from firebase_admin import initialize_app, firestore, storage
+import time
+
+from firebase_admin import auth, firestore, initialize_app, storage
+from firebase_functions import https_fn, storage_fn
+from firebase_functions.params import SecretParam
+
+from bot_gateway import handle_gateway
+from firestore_store import FirestoreGatewayStore
 
 # Initialize the Firebase Admin SDK
 initialize_app()
+
+# Bound from Secret Manager at deploy time. Values are never committed.
+BOT_API_KEYS = SecretParam(
+    "BOT_API_KEYS",
+    description="JSON map of axis-bot id to API key, used for reads and mutation proposals.",
+)
+ABI_APPROVAL_SECRET = SecretParam(
+    "ABI_APPROVAL_SECRET",
+    description="Secret only Abi holds. Alternative to a Firebase ID token for confirming finance writes.",
+)
+
+
+def _verify_firebase_id_token(token: str) -> dict:
+    """Verify a Firebase Auth ID token. Raises if the token is not valid."""
+    decoded = auth.verify_id_token(token)
+    uid = decoded.get("uid") or decoded.get("sub")
+    if not isinstance(uid, str) or not uid:
+        raise ValueError("id token missing uid")
+    return {"uid": uid}
 
 # We will look for this marker in the filename to identify resized images.
 RESIZED_IMAGE_MARKER = "_800x800"
@@ -71,3 +97,44 @@ def on_image_upload(event: storage_fn.CloudEvent[storage_fn.StorageObjectData]):
 
     except Exception as e:
         print(f"Error creating Firestore document: {e}")
+
+
+@https_fn.on_request(
+    region="us-central1",
+    secrets=[BOT_API_KEYS, ABI_APPROVAL_SECRET],
+    invoker="public",
+    timeout_sec=30,
+)
+def bot_gateway(req: https_fn.Request) -> https_fn.Response:
+    """Finance drafts and CoS reads. See docs/bot-gateway.md."""
+    raw_body = ""
+    try:
+        raw_body = req.get_data(cache=False, as_text=True) or ""
+        status, payload = handle_gateway(
+            req.method,
+            req.headers,
+            raw_body,
+            store=FirestoreGatewayStore(firestore.client()),
+            bot_keys_raw=BOT_API_KEYS.value,
+            approval_secret=ABI_APPROVAL_SECRET.value,
+            now=int(time.time()),
+            verify_id_token=_verify_firebase_id_token,
+        )
+    except Exception as exc:
+        print(f"bot_gateway error: {type(exc).__name__}")
+        status = 500
+        payload = {"ok": False, "error": "internal"}
+
+    print(
+        "bot_gateway http=%s result=%s collection=%s"
+        % (
+            status,
+            payload.get("error") or payload.get("status") or payload.get("action"),
+            payload.get("collection"),
+        )
+    )
+    return https_fn.Response(
+        json.dumps(payload, separators=(",", ":")),
+        status=status,
+        mimetype="application/json",
+    )

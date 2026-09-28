@@ -14,7 +14,9 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "*.local"
+        "*.local",
+        "__pycache__",
+        "test_*.py"
       ],
       "runtime": "python312"
     }
