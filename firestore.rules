@@ -10,10 +10,12 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Every other document still requires a signed-in Firebase user.
-    // This is a single-user personal app.
+    // Gearshift client SDK access is Abi's Firebase Auth uid only.
+    // Axis bots do not use this path; bot_gateway uses the Admin SDK,
+    // which bypasses these rules.
     match /{collection}/{document=**} {
       allow read, write: if request.auth != null
+        && request.auth.uid == '1SORgD4xeFYG5hMRAmPjw6iUyJk2'
         && collection != 'botGatewayConfirmations';
     }
   }
