@@ -148,7 +148,10 @@ function NowViewDemo() {
 
     return (
         <div className={styles.nowViewContainer}>
-            <h2 className={styles.viewTitle}>Now (Demo)</h2>
+            <div className={styles.demoTitleBlock}>
+                <h2 className={styles.viewTitle}>Gearshift demo</h2>
+                <p className={styles.demoBanner}>Portfolio preview with sample data. No login. Nothing here is written to an account.</p>
+            </div>
             <div className={styles.leftPanel}>
                 {/* This is the tooltip you were editing. You can safely change the text inside the quotes. */}
                 <Tooltip text="By tracking key emotional moments (Epiphanies and Despairs), I can analyze how well my systems are working together and their impact on my mental state.">

@@ -53,6 +53,22 @@
   margin-bottom: var(--space-lg, 1.5rem);
 }
 
+.demoTitleBlock {
+  grid-area: title;
+  text-align: center;
+}
+
+.demoTitleBlock .viewTitle {
+  grid-area: auto;
+  margin-bottom: 0.35rem;
+}
+
+.demoBanner {
+  margin: 0 0 var(--space-lg, 1.5rem);
+  font-size: 0.95rem;
+  color: var(--text-secondary, #355E58);
+}
+
 /* Panels */
 .leftPanel, .centerPanel, .rightPanel {
   display: flex;

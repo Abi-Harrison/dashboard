@@ -56,7 +56,7 @@ The application is built using a modern web development stack to ensure scalabil
 * **Backend:** Firebase (Firestore, Authentication, Hosting)
 * **Deployment:** Firebase Hosting
 
-For detailed technical implementation and source code, please refer to the GitHub repository: [https://github.com/tiffigail/dashboard](https://github.com/tiffigail/dashboard)
+For the source, see the GitHub repository: [https://github.com/Abi-Harrison/dashboard](https://github.com/Abi-Harrison/dashboard)
 
 ### 5. Getting Started / Onboarding for New Instances
 
@@ -114,13 +114,13 @@ This subsection will explore the various interconnected views within the applica
 ![Pareto View with Stretch Goals](portfolio_assets/ParetoView_Stretchgoals.png)
 
 **Yearly View:** Offers an outline of the user’s current yearly goals, tracking progress against these objectives throughout the year.
-![Year View](portfolio_assets\Year_View_5.23.25.png)
+![Year View](portfolio_assets/Year_View_5.23.25.png)
 **Month View:** Allows for time-based theming that doesn’t necessarily relate directly to one of the five core Axes, providing flexibility for monthly focuses or projects.
 ![Month View Calendar](portfolio_assets/Month_View_Calendar_5.23.25.png)
 ![Month View Event Reward](portfolio_assets/Month_View_Event_Reward_5.23.25.png)
 
 **Weekly View:** This dashboard is designed for higher-level planning and thematic organization of the week. Each day within the Weekly View is typically assigned a specific Axis or theme (e.g., Physical, Financial, Gear, Misdirect, Environment, Rest and Preparation, On Track: N+1). This helps the user align their weekly goals and steps with the broader Pareto principles and their five core axes of focus, ensuring a balanced approach to the week's activities.
-    ![Weekly View](portfolio_assets\Weekly_DaysOfWeek.png)
+    ![Weekly View](portfolio_assets/Weekly_DaysOfWeek.png)
 **Daily View:** This view allows the user to manage and visualize their daily activities with more granularity helps in structuring the day to maximize productivity and intentionality, ensuring that daily actions are aligned with the weekly theme and broader goals.
 Key Features:
 * **Emotional/Productivity Snapshot:** The top section often features a chart or visual representation of daily productivity, epiphanies, and despairs, providing a quick understanding of the user's emotional and productive state.
@@ -135,7 +135,7 @@ Key Features:
     ![Pomodoro Cycle Log 1](portfolio_assets/Pomodorro_Cycle_Log_5.22.25.png)
     ![Pomodoro Cycle Log 2](portfolio_assets/Pomodorro_Cycle_Log_2_5.22.25.png)
 
-View on github: [https://github.com/tiffigail/dashboard/compare/feature/pomodoro-iteration-2-new-logic](https://github.com/tiffigail/dashboard/compare/feature/pomodoro-iteration-2-new-logic)
+View on GitHub: [https://github.com/Abi-Harrison/dashboard/compare/feature/pomodoro-iteration-2-new-logic](https://github.com/Abi-Harrison/dashboard/compare/feature/pomodoro-iteration-2-new-logic)
 
 **Now View:** This view is designed for immediate focus, helping the user concentrate on the current task or action and ensuring that present efforts contribute directly to overarching goals. The Now View aims to minimize distractions and maximize concentration on the task at hand. The combination of real-time reflection, task management, timed focus sessions, and constant visibility of hierarchical goals ensures that the user's current "Now" focus is always aligned with their larger Pareto Project objectives.
     ![Now View - Top Section](portfolio_assets/Now_Top_5.21.25.png)
@@ -164,8 +164,8 @@ These modals help the user stay motivated and focused through time. They outline
 **Weekly Planning Modal**
 
 This modal allows the user to view the upcoming milestone and plan weekly goals and upcoming next steps.
-![Weekly Planning Modal 1](portfolio_assets\Weekly_Goals_Next_Plans_1_5.23.25.png)
-![Weekly Planning Modal 2](portfolio_assets\Weekly_Goals_Next_Plans_2_5.23.25.png)
+![Weekly Planning Modal 1](portfolio_assets/Weekly_Goals_Next_Plans_1_5.23.25.png)
+![Weekly Planning Modal 2](portfolio_assets/Weekly_Goals_Next_Plans_2_5.23.25.png)
 **AM Routine Modal**
 
 The AM Modal outlines the morning checklist and allows the user to write down thoughts and keep a gratitude journal.
