@@ -50,11 +50,55 @@
     margin-bottom: 1rem;
 }
 
+.criteriaList {
+    text-align: left;
+    max-width: 750px;
+    margin: 1.5rem auto 0;
+    padding-left: 1.2rem;
+    color: #2d3748;
+    line-height: 1.6;
+    font-size: 1.02rem;
+}
+
+.criteriaList li {
+    margin-bottom: 0.85rem;
+}
+
+.caseStudy {
+    text-align: left;
+    max-width: 750px;
+    margin: 0.5rem auto 0;
+    padding: 1rem 1.25rem;
+    background: #f7fafc;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    color: #2d3748;
+    line-height: 1.65;
+    font-size: 0.98rem;
+}
+
+.caseStudy h2 {
+    font-size: 1.05rem;
+    margin: 0 0 0.45rem;
+    color: #1a202c;
+}
+
+.caseStudy p {
+    margin: 0;
+}
+
 .buttonContainer {
     margin-top: 2.5rem; /* Reduced spacing */
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 1rem;
+}
+
+.shareNote {
+    margin: 0.9rem 0 0;
+    font-size: 0.92rem;
+    color: #4a5568;
 }
 
 .primaryButton,

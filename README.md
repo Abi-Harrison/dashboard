@@ -1,27 +1,33 @@
-# Gearshift Dashboard
+# Gearshift
 
-Welcome to the Gearshift Dashboard project! This is a personal productivity dashboard designed to help track daily routines, tasks, and analyze work patterns like Pomodoro cycles.
+Personal planning system for daily focus, routines, and long-range goals. The product loop is discovery, information architecture, an applied-AI advisor, and instrumentation (including Pomodoro and break analytics).
 
-## Key Features
-*   Daily task management
-*   Pomodoro timer with break logging
-*   Routine tracking (AM/PM, Cleaning, Budget, etc.)
-*   Data visualization for daily metrics and break analysis
-*   [Add any other key features]
+Live: https://dashboard-bb237.web.app/
 
-## Technologies Used
-*   React
-*   Vite
-*   Firebase (Firestore)
-*   Chart.js / Recharts 
-*   [Add any other significant libraries/technologies]
+## Share with reviewers
 
-## Project Documentation & Portfolio
+These paths do not require login:
 
-For a detailed overview of this project, its features, and my development process, please see the following documents:
+- Welcome: https://dashboard-bb237.web.app/
+- Demo (sample Now view): https://dashboard-bb237.web.app/demo
+- Concepts tour: https://dashboard-bb237.web.app/concepts
 
-*   **[Main Portfolio & Project Overview](./docs/portfolio/portfolio.md)**
-*   **[Detailed Feature Iterations (Pomodoro Break Analysis)](./docs/feature_iterations/pomodoro_break_feature/)** 
-    *   [Iteration 1: Initial Ratio Analysis](./docs/feature_iterations/pomodoro_break_feature/iteration_01_initial_ratio_analysis.md)
-    *   [Iteration 2: Awareness & Detailed Metrics](./docs/feature_iterations/pomodoro_break_feature/iteration_02_awareness.md)
-    *   *(Link to new iterations as you add them)*
+## What it covers
+
+- Daily tasks and routines
+- Pomodoro timer with break logging
+- A zoom from a life map down to the current hour
+- An Advisor that proposes structured records and waits for a confirm before storing them
+
+## Technologies
+
+- React
+- Vite
+- Firebase (Firestore)
+- Chart.js / Recharts
+
+## Documentation
+
+- [Project overview](./docs/portfolio/portfolio.md)
+- [Pomodoro break analysis, iteration 1](./docs/feature_iterations/pomodoro_break_feature/iteration_01_initial_ratio_analysis.md)
+- [Pomodoro break analysis, iteration 2](./docs/feature_iterations/pomodoro_break_feature/iteration_02_awareness.md)

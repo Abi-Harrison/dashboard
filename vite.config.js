@@ -18,9 +18,9 @@ export default defineConfig({
       // },
       manifest: {
         // Copy details from your existing manifest.json here
-        short_name: "GearShift",
-        name: "GearShift Dashboard",
-        description: "A personal productivity and planning dashboard.",
+        short_name: "Gearshift",
+        name: "Gearshift",
+        description: "A personal planning system for focus, recovery, and long-range goals.",
         icons: [
           // Use icons from your /public/icon folder
           {

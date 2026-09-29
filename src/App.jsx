@@ -63,6 +63,7 @@ function AppLayout() {
             <div className={styles.contentArea}>
                 <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>Loading...</div>}>
                     <Routes>
+                        {/* Public share paths. /demo is the portfolio entry and must stay reachable with no account. */}
                         <Route path="/" element={<ErrorBoundary><Welcome /></ErrorBoundary>} />
                         <Route path="/concepts" element={<ErrorBoundary><ParetoViewDemo /></ErrorBoundary>} />
                         <Route path="/showcase" element={<ErrorBoundary><Showcase /></ErrorBoundary>} />
