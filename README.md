@@ -28,6 +28,7 @@ These paths do not require login:
 
 ## Documentation
 
+- [Rules of Engagement — Claude ↔ IM](./docs/roe-claude-im.md)
 - [Project overview](./docs/portfolio/portfolio.md)
 - [Pomodoro break analysis, iteration 1](./docs/feature_iterations/pomodoro_break_feature/iteration_01_initial_ratio_analysis.md)
 - [Pomodoro break analysis, iteration 2](./docs/feature_iterations/pomodoro_break_feature/iteration_02_awareness.md)
