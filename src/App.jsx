@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, NavLink, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, NavLink, Link, useLocation } from 'react-router-dom';
 import styles from '@/App.module.css';
 
 // Import providers and components
@@ -21,7 +21,7 @@ import ParetoView from '@/pages/ParetoView/ParetoView';
 import LifeMapView from '@/pages/LifeMapView/LifeMapView';
 
 // Public/demo pages — lazy is fine, they're rarely visited
-const Welcome = React.lazy(() => import('@/pages/Welcome/Welcome.jsx'));
+const Portfolio = React.lazy(() => import('@/pages/Portfolio/Portfolio.jsx'));
 const Showcase = React.lazy(() => import('@/pages/Showcase/Showcase.jsx'));
 const NowViewDemo = React.lazy(() => import('@/pages/NowView/NowViewDemo.jsx'));
 const Contact = React.lazy(() => import('@/pages/Contact/Contact.jsx'));
@@ -30,6 +30,8 @@ const AIAdvisor = React.lazy(() => import('@/features/advisor/AIAdvisor/AIAdviso
 
 function AppLayout() {
     const { currentUser } = useAuth();
+    const { pathname } = useLocation();
+    const isPortfolioHome = pathname === '/';
     const buttonStyle = { margin: '0.5rem', padding: '0.5rem 1rem', cursor: 'pointer', border: '1px solid #ccc', borderRadius: '4px', backgroundColor: '#e7e7e7', transition: 'background-color 0.2s ease', fontSize: '0.9em', textDecoration: 'none', color: 'black' };
     const activeButtonStyle = { ...buttonStyle, backgroundColor: '#a0a0a0', fontWeight: 'bold', borderColor: '#888' };
 
@@ -42,7 +44,7 @@ function AppLayout() {
     };
 
     return (
-        <div className={styles.appContainer}>
+        <div className={`${styles.appContainer} ${isPortfolioHome ? styles.landingShell : ''}`}>
             {currentUser && (
                  <div style={{ marginBottom: '1rem', flexWrap: 'wrap', display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', zIndex: 2000 }}>
                     <NavLink to="/life" style={({ isActive }) => isActive ? activeButtonStyle : buttonStyle}>Life Map</NavLink>
@@ -60,11 +62,11 @@ function AppLayout() {
                 </div>
             )}
 
-            <div className={styles.contentArea}>
+            <div className={`${styles.contentArea} ${isPortfolioHome ? styles.landingContent : ''}`}>
                 <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>Loading...</div>}>
                     <Routes>
-                        {/* Public share paths. /demo is the portfolio entry and must stay reachable with no account. */}
-                        <Route path="/" element={<ErrorBoundary><Welcome /></ErrorBoundary>} />
+                        {/* Public share paths. / is the Re-establish portfolio landing. /demo stays reachable with no account. */}
+                        <Route path="/" element={<ErrorBoundary><Portfolio /></ErrorBoundary>} />
                         <Route path="/concepts" element={<ErrorBoundary><ParetoViewDemo /></ErrorBoundary>} />
                         <Route path="/showcase" element={<ErrorBoundary><Showcase /></ErrorBoundary>} />
                         <Route path="/demo" element={<ErrorBoundary><NowViewDemo /></ErrorBoundary>} />
